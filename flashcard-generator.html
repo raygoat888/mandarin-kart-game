@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mandarin DIY Flashcard Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --primary: #ff6b35;
+      --secondary: #2ec4b6;
+      --bg: #f7f9fc;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: #222;
+      margin: 0;
+      padding: 20px;
+    }
+    .controls {
+      max-width: 900px;
+      margin: 0 auto 30px auto;
+      background: white;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    h1 { margin-top: 0; color: var(--primary); }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    input, button {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+    input { flex: 1; min-width: 140px; }
+    button {
+      background: var(--secondary);
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+    .print-btn {
+      background: var(--primary);
+      font-size: 16px;
+      padding: 12px 24px;
+    }
+    .tips {
+      font-size: 14px;
+      color: #555;
+      background: #fff8e7;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 4px solid #ffb703;
+    }
+
+    /* Printable Sheet Layout */
+    .sheet {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .card-pair {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .card {
+      width: 260px;
+      height: 340px;
+      background: white;
+      border: 2px dashed #999;
+      box-sizing: border-box;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+    }
+    .card.front {
+      border-right: 2px solid #333; /* Fold line! */
+      border-radius: 16px 0 0 16px;
+    }
+    .card.back {
+      border-left: none;
+      border-radius: 0 16px 16px 0;
+    }
+    .emoji-art {
+      font-size: 110px;
+      margin-top: 35px;
+      line-height: 1;
+    }
+    .qr-box {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: white;
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid #eee;
+    }
+    .card-id-label {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      font-size: 11px;
+      color: #aaa;
+    }
+    .pinyin {
+      font-size: 30px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-top: 10px;
+    }
+    .hanzi {
+      font-size: 76px;
+      font-weight: bold;
+      color: #111;
+      line-height: 1.1;
+    }
+    .english {
+      font-size: 24px;
+      color: #555;
+      margin-bottom: 10px;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .controls { display: none; }
+      .sheet { gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>🀄 DIY Mandarin Flashcard Generator</h1>
+  <p>Add words below, click <strong>Print Cards</strong>, cut along the dashed border, fold down the center solid line, and glue together!</p>
+  
+  <div class="form-row">
+    <input type="text" id="emojiInput" placeholder="Emoji/Icon (e.g. 🐶 or leave blank to draw)" />
+    <input type="text" id="pinyinInput" placeholder="Pinyin (e.g. xiǎo gǒu)" />
+    <input type="text" id="hanziInput" placeholder="Hanzi (e.g. 小狗)" />
+    <input type="text" id="englishInput" placeholder="English (e.g. puppy)" />
+    <button onclick="addCard()">+ Add Card</button>
+  </div>
+
+  <div style="display:flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <button style="background:#888;" onclick="resetDefaults()">Reset Starter Deck</button>
+  </div>
+
+  <p class="tips" style="margin-top:15px;">
+    <strong>Craft Tip:</strong> Leave the Emoji box blank to print a "Draw-Your-Own" card so your 8- and 6-year-old can illustrate the front themselves! Every card gets a unique QR code in the corner for the game camera.
+  </p>
+</div>
+
+<div class="sheet" id="cardSheet"></div>
+
+<script>
+  const starterDeck = [
+    { id: "CARD_DOG", emoji: "🐶", pinyin: "xiǎo gǒu", hanzi: "小狗", english: "puppy" },
+    { id: "CARD_HOUSE", emoji: "🏠", pinyin: "fáng zi", hanzi: "房子", english: "house" },
+    { id: "CARD_TRIANGLE", emoji: "🔺", pinyin: "hóng sān jiǎo", hanzi: "红三角", english: "red triangle" },
+    { id: "CARD_WATER", emoji: "💧", pinyin: "shuǐ", hanzi: "水", english: "water" },
+    { id: "CARD_APPLE", emoji: "🍎", pinyin: "píng guǒ", hanzi: "苹果", english: "apple" },
+    { id: "CARD_BREAD", emoji: "🍞", pinyin: "miàn bāo", hanzi: "面包", english: "bread" },
+    { id: "CARD_CAR", emoji: "🏎️", pinyin: "qì chē", hanzi: "汽车", english: "car" },
+    { id: "CARD_THREE", emoji: "3️⃣", pinyin: "sān", hanzi: "三", english: "three" }
+  ];
+
+  let cards = [...starterDeck];
+
+  function renderCards() {
+    const sheet = document.getElementById("cardSheet");
+    sheet.innerHTML = "";
+
+    cards.forEach((card, index) => {
+      const pair = document.createElement("div");
+      pair.className = "card-pair";
+
+      const qrContainerId = `qr-${index}`;
+
+      pair.innerHTML = `
+        <div class="card front">
+          <div class="emoji-art">${card.emoji || ""}</div>
+          <span class="card-id-label">${card.id}</span>
+          <div class="qr-box" id="${qrContainerId}"></div>
+        </div>
+        <div class="card back">
+          <div class="pinyin">${card.pinyin}</div>
+          <div class="hanzi">${card.hanzi}</div>
+          <div class="english">${card.english}</div>
+        </div>
+      `;
+
+      sheet.appendChild(pair);
+
+      new QRCode(document.getElementById(qrContainerId), {
+        text: card.id,
+        width: 58,
+        height: 58,
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    });
+  }
+
+  function addCard() {
+    const emoji = document.getElementById("emojiInput").value.trim();
+    const pinyin = document.getElementById("pinyinInput").value.trim();
+    const hanzi = document.getElementById("hanziInput").value.trim();
+    const english = document.getElementById("englishInput").value.trim();
+
+    if (!pinyin || !hanzi || !english) {
+      alert("Please fill in Pinyin, Hanzi, and English!");
+      return;
+    }
+
+    const cleanId = "CARD_" + english.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+    cards.push({ id: cleanId, emoji, pinyin, hanzi, english });
+
+    document.getElementById("emojiInput").value = "";
+    document.getElementById("pinyinInput").value = "";
+    document.getElementById("hanziInput").value = "";
+    document.getElementById("englishInput").value = "";
+
+    renderCards();
+  }
+
+  function resetDefaults() {
+    cards = [...starterDeck];
+    renderCards();
+  }
+
+  renderCards();
+</script>
+
+</body>
+</html>
